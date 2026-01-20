@@ -18,6 +18,9 @@ from utils.utils_config import get_config
 from utils.utils_distributed_sampler import setup_seed
 from utils.utils_logging import AverageMeter, init_logging
 from torch.distributed.algorithms.ddp_comm_hooks.default_hooks import fp16_compress_hook
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 assert torch.__version__ >= "1.12.0", "In order to enjoy the features of the new torch, \
 we have upgraded the torch to 1.12.0. torch before than 1.12.0 may not work in the future."
@@ -175,8 +178,12 @@ def main(args):
     loss_am = AverageMeter()
     amp = torch.cuda.amp.grad_scaler.GradScaler(growth_interval=100)
 
+    loss_history = []
+    acc_history = []
+
     for epoch in range(start_epoch, cfg.num_epoch):
 
+        loss_am.reset()
         if isinstance(train_loader, DataLoader):
             train_loader.sampler.set_epoch(epoch)
         for _, (img, local_labels) in enumerate(train_loader):
@@ -214,13 +221,17 @@ def main(args):
 
                 if global_step % cfg.verbose == 0 and global_step > 0:
                     acc = callback_verification(global_step, backbone)
-                    if acc is not None and acc > highest_acc:
-                        highest_acc = acc
-                        best_step = global_step
-                        if rank == 0:
-                            path_best = os.path.join(cfg.output, "model_best.pt")
-                            torch.save(backbone.module.state_dict(), path_best)
-                            logging.info(f"New best accuracy: {highest_acc:.5f} at step {global_step}")
+                    if acc is not None:
+                        acc_history.append((global_step, acc))
+                        if acc > highest_acc:
+                            highest_acc = acc
+                            best_step = global_step
+                            if rank == 0:
+                                path_best = os.path.join(cfg.output, "model_best.pt")
+                                torch.save(backbone.module.state_dict(), path_best)
+                                logging.info(f"New best accuracy: {highest_acc:.5f} at step {global_step}")
+
+        loss_history.append(loss_am.avg)
 
         if cfg.save_all_states:
             checkpoint = {
@@ -248,6 +259,31 @@ def main(args):
 
     if rank == 0:
         logging.info(f"Training completed. Best Accuracy: {highest_acc:.5f} at step {best_step}")
+        
+        # Plot Loss/Epoch
+        plt.figure(figsize=(10, 5))
+        plt.plot(range(start_epoch, cfg.num_epoch), loss_history, label='Train Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.title('Loss vs Epoch')
+        plt.legend()
+        plt.grid(True)
+        plt.savefig(os.path.join(cfg.output, 'loss_epoch.png'))
+        plt.close()
+
+        # Plot Accuracy/Step (showing the trend across epochs)
+        if acc_history:
+            steps, accs = zip(*acc_history)
+            plt.figure(figsize=(10, 5))
+            plt.plot(steps, accs, label='Verification Accuracy', color='orange')
+            plt.xlabel('Global Step')
+            plt.ylabel('Accuracy')
+            plt.title('Verification Accuracy vs Step')
+            plt.legend()
+            plt.grid(True)
+            plt.savefig(os.path.join(cfg.output, 'accuracy_step.png'))
+            plt.close()
+
         path_module = os.path.join(cfg.output, "model.pt")
         torch.save(backbone.module.state_dict(), path_module)
         
