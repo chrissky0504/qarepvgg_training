@@ -18,3 +18,4 @@ __pycache__/
 .vscode/
 *.data
 data/ms1m-retinaface-t1
+work_dirs
