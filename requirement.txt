@@ -4,3 +4,7 @@ mxnet
 onnx
 scikit-learn
 opencv-python
+matplotlib
+scipy==1.15.3
+numpy==1.23.5
+scikit-learn==1.7.2
