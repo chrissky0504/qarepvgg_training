@@ -14,10 +14,25 @@ from insightface.data import get_image
 
 class ArcFaceORT:
     def __init__(self, model_path, cpu=False):
-        self.model_path = model_path
-        # providers = None will use available provider, for onnxruntime-gpu it will be "CUDAExecutionProvider"
-        self.providers = ['CPUExecutionProvider'] if cpu else None
-
+            self.model_path = model_path
+            # 如果不強制用 CPU，就設為 None (讓 ONNX Runtime 自動抓 CUDA)
+            self.providers = ['CPUExecutionProvider'] if cpu else None
+            
+            try:
+                import onnxruntime
+                self.session = onnxruntime.InferenceSession(self.model_path, providers=self.providers)
+            except:
+                print(f"⚠️ GPU 載入失敗，切換回 CPU 模式: {self.model_path}")
+                import onnxruntime
+                self.session = onnxruntime.InferenceSession(self.model_path, providers=['CPUExecutionProvider'])
+            
+            self.input_name = self.session.get_inputs()[0].name
+            self.output_names = [o.name for o in self.session.get_outputs()]
+            self.input_mean = 127.5
+            self.input_std = 127.5
+            
+            # === 這是原本缺少的關鍵一行 ===
+            self.feat_dim = 512
     #input_size is (w,h), return error message, return None if success
     def check(self, track='cfat', test_img = None):
         #default is cfat

@@ -4,7 +4,6 @@ import pickle
 import timeit
 
 import cv2
-import mxnet as mx
 import numpy as np
 import pandas as pd
 import prettytable
@@ -27,7 +26,7 @@ SRC[:, 0] += 8.0
 
 
 @torch.no_grad()
-class AlignedDataSet(mx.gluon.data.Dataset):
+class AlignedDataSet(object):
     def __init__(self, root, lines, align=True):
         self.lines = lines
         self.root = root
@@ -62,32 +61,39 @@ def extract(model_root, dataset):
         return torch.cat(data, dim=0)
 
     data_loader = DataLoader(
-        dataset, batch_size=128, drop_last=False, num_workers=4, collate_fn=collate_fn, )
-    num_iter = 0
+        dataset, batch_size=1, drop_last=False, num_workers=4, collate_fn=collate_fn, )
+    idx = 0
     for batch in data_loader:
         batch = batch.numpy()
         batch = (batch - model.input_mean) / model.input_std
-        feat = model.session.run(model.output_names, {model.input_name: batch})[0]
+        
+        # Run inference one by one to support static batch size = 1
+        feats = []
+        for i in range(batch.shape[0]):
+            feat = model.session.run(model.output_names, {model.input_name: batch[i:i+1]})[0]
+            feats.append(feat)
+        feat = np.concatenate(feats, axis=0)
+
         feat = np.reshape(feat, (-1, model.feat_dim * 2))
-        feat_mat[128 * num_iter: 128 * num_iter + feat.shape[0], :] = feat
-        num_iter += 1
-        if num_iter % 50 == 0:
-            print(num_iter)
+        feat_mat[idx: idx + feat.shape[0], :] = feat
+        idx += feat.shape[0]
+        if idx % 50 == 0:
+            print(idx)
     return feat_mat
 
 
 def read_template_media_list(path):
     ijb_meta = pd.read_csv(path, sep=' ', header=None).values
-    templates = ijb_meta[:, 1].astype(np.int)
-    medias = ijb_meta[:, 2].astype(np.int)
+    templates = ijb_meta[:, 1].astype(np.int32)
+    medias = ijb_meta[:, 2].astype(np.int32)
     return templates, medias
 
 
 def read_template_pair_list(path):
     pairs = pd.read_csv(path, sep=' ', header=None).values
-    t1 = pairs[:, 0].astype(np.int)
-    t2 = pairs[:, 1].astype(np.int)
-    label = pairs[:, 2].astype(np.int)
+    t1 = pairs[:, 0].astype(np.int32)
+    t2 = pairs[:, 1].astype(np.int32)
+    label = pairs[:, 2].astype(np.int32)
     return t1, t2, label
 
 
@@ -191,8 +197,28 @@ def main(args):
     img_list_path = '%s/meta/%s_name_5pts_score.txt' % (args.image_path, args.target.lower())
     img_list = open(img_list_path)
     files = img_list.readlines()
-    dataset = AlignedDataSet(root=img_path, lines=files, align=True)
-    img_feats = extract(args.model_root, dataset)
+
+    # Define result directory and file paths early
+    result_dir = args.result_dir
+    save_path = result_dir  
+    #save_path = os.path.join(result_dir, "{}_result".format(args.target))
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
+    # Use model name to differentiate cache files. 
+    # This prevents different models from using the same features logic.
+    model_name = os.path.splitext(os.path.basename(args.model_root))[0]
+    features_path = os.path.join(save_path, 'img_feats_{}.npy'.format(model_name))
+
+    # Load cached features if they exist, otherwise extract and save
+    if os.path.exists(features_path):
+        print('Loading features from %s' % features_path)
+        img_feats = np.load(features_path)
+    else:
+        print('Cache not found for model parameters. Extracting features...')
+        dataset = AlignedDataSet(root=img_path, lines=files, align=True)
+        img_feats = extract(args.model_root, dataset)
+        np.save(features_path, img_feats)
 
     faceness_scores = []
     for each_line in files:
@@ -229,12 +255,8 @@ def main(args):
     score = verification(template_norm_feats, unique_templates, p1, p2)
     stop = timeit.default_timer()
     print('Time: %.2f s. ' % (stop - start))
-    result_dir = args.model_root
-
-    save_path = os.path.join(result_dir, "{}_result".format(args.target))
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
-    score_save_file = os.path.join(save_path, "{}.npy".format(args.target))
+    
+    score_save_file = os.path.join(save_path, "{}_{}.npy".format(args.target, model_name))
     np.save(score_save_file, score)
     files = [score_save_file]
     methods = []
@@ -264,6 +286,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='do ijb test')
     # general
     parser.add_argument('--model-root', default='', help='path to load model.')
-    parser.add_argument('--image-path', default='/train_tmp/IJB_release/IJBC', type=str, help='')
+    parser.add_argument('--image-path', default='ijb/IJBC', type=str, help='')
     parser.add_argument('--target', default='IJBC', type=str, help='target, set to IJBC or IJBB')
+    parser.add_argument('--result-dir', default='.', type=str, help='path to save results and cache.')
     main(parser.parse_args())
