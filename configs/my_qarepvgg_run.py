@@ -7,7 +7,7 @@ from easydict import EasyDict as edict
 config = edict()
 config.margin_list = (1.0, 0.5, 0.0)
 config.network = "qarepvgg_b1"
-config.resume = True
+config.resume = False 
 config.output = None
 config.embedding_size = 512
 config.sample_rate = 1.0
@@ -15,14 +15,14 @@ config.fp16 = True
 config.momentum = 0.9
 config.weight_decay = 5e-4
 config.batch_size = 256
-config.lr = 0.1
+config.lr = 0.05
 config.verbose = 2000
 config.dali = False
 
 config.rec = "data/ms1m-retinaface-t1"
 config.num_classes = 93431
 config.num_image = 5179510
-config.num_epoch = 100
-config.warmup_epoch = 0
+config.num_epoch = 20 
+config.warmup_epoch = 1
 config.val_targets = ['lfw', 'cfp_fp', "agedb_30"]
 config.save_all_states = True

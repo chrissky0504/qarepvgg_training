@@ -21,3 +21,7 @@ data/ms1m-retinaface-t1
 work_dirs
 IJBC_result
 ijb
+*.pth
+backbone.pth
+*.log
+training.log
