@@ -43,7 +43,7 @@ class QARepVGGFace(nn.Module):
         
         # --- 跑特徵頭 (Embedding Head) ---
         x = self.bn_input(x)
-        x = x.view(x.size(0), -1) # 拉平 (Flatten)
+        x = x.reshape(x.size(0), -1) # 拉平 (Flatten)
         x = self.dropout(x)
         x = self.fc(x)
         x = self.bn_output(x)

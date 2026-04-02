@@ -194,6 +194,7 @@ def main(args):
     for epoch in range(start_epoch, cfg.num_epoch):
 
         loss_am.reset()
+        epoch_loss_am = AverageMeter()
         if isinstance(train_loader, DataLoader):
             train_loader.sampler.set_epoch(epoch)
         for _, (img, local_labels) in enumerate(train_loader):
@@ -227,6 +228,7 @@ def main(args):
                     })
                     
                 loss_am.update(loss.item(), 1)
+                epoch_loss_am.update(loss.item(), 1)
                 callback_logging(global_step, loss_am, epoch, cfg.fp16, lr_scheduler.get_last_lr()[0], amp)
 
                 if global_step % cfg.verbose == 0 and global_step > 0:
@@ -241,11 +243,11 @@ def main(args):
                                 torch.save(backbone.module.state_dict(), path_best)
                                 logging.info(f"New best accuracy: {highest_acc:.5f} at step {global_step}")
 
-        loss_history.append(loss_am.avg)
+        loss_history.append(epoch_loss_am.avg)
 
         # 檢查是否達到目標 Loss 並停止訓練
-        if loss_am.avg < 1.0:
-            logging.info(f"Loss reached {loss_am.avg:.4f} (< 1.0). Stopping training at epoch {epoch}.")
+        if epoch_loss_am.avg < 1.0:
+            logging.info(f"Loss reached {epoch_loss_am.avg:.4f} (< 1.0). Stopping training at epoch {epoch}.")
             break
 
         if cfg.save_all_states:
@@ -277,7 +279,8 @@ def main(args):
         
         # Plot Loss/Epoch
         plt.figure(figsize=(10, 5))
-        plt.plot(range(start_epoch, cfg.num_epoch), loss_history, label='Train Loss')
+        actual_epochs = len(loss_history)
+        plt.plot(range(start_epoch, start_epoch + actual_epochs), loss_history, label='Train Loss')
         plt.xlabel('Epoch')
         plt.ylabel('Loss')
         plt.title('Loss vs Epoch')

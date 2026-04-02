@@ -25,3 +25,4 @@ ijb
 backbone.pth
 *.log
 training.log
+insightface

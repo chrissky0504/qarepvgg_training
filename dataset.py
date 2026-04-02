@@ -15,6 +15,9 @@ from torchvision.datasets import ImageFolder
 from utils.utils_distributed_sampler import DistributedSampler
 from utils.utils_distributed_sampler import get_dist_info, worker_init_fn
 
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
+
 
 def get_dataloader(
     root_dir,
@@ -137,12 +140,30 @@ class DataLoaderX(DataLoader):
 class MXFaceDataset(Dataset):
     def __init__(self, root_dir, local_rank):
         super(MXFaceDataset, self).__init__()
-        self.transform = transforms.Compose(
-            [transforms.ToPILImage(),
-             transforms.RandomHorizontalFlip(),
-             transforms.ToTensor(),
-             transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
-             ])
+        
+        # 【修改點 1】捨棄 torchvision，換成特化版的 Albumentations 管線
+        self.transform = A.Compose([
+            A.HorizontalFlip(p=0.5), # 基礎翻轉
+            
+            # 1. 模擬長距離：特徵流失與馬賽克感
+            # Downscale 會將圖片縮小後再放大回原尺寸，完美模擬遠距離小臉
+            A.Downscale(scale=(0.2, 0.5), p=0.3),
+            
+            # 2. 模擬車體震動與對焦失準
+            A.OneOf([
+                A.MotionBlur(blur_limit=15, p=1.0),
+                A.GaussianBlur(blur_limit=(3, 7), p=1.0),
+            ], p=0.4),
+            
+            # 3. 模擬背光、曝光與 MX Brio 感光雜訊
+            A.RandomBrightnessContrast(brightness_limit=0.4, contrast_limit=0.4, p=0.4),
+            A.ISONoise(color_shift=(0.01, 0.01), intensity=(0.1, 0.5), p=0.2), 
+            
+            # 必備的正規化與轉 Tensor (數值與你原本的一模一樣)
+            A.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+            ToTensorV2()
+        ])
+        
         self.root_dir = root_dir
         self.local_rank = local_rank
         path_imgrec = os.path.join(root_dir, 'train.rec')
@@ -164,14 +185,20 @@ class MXFaceDataset(Dataset):
         if not isinstance(label, numbers.Number):
             label = label[0]
         label = torch.tensor(int(label), dtype=torch.long)
+        
+        # 這裡解出來的 sample 剛好是 Numpy array (H, W, C)
+        # 這是 Albumentations 唯一支援也是最喜歡的格式！
         sample = mx.image.imdecode(img).asnumpy()
+        
+        # 【修改點 2】套用 Albumentations 的語法
         if self.transform is not None:
-            sample = self.transform(sample)
+            augmented = self.transform(image=sample)
+            sample = augmented['image']
+            
         return sample, label
 
     def __len__(self):
         return len(self.imgidx)
-
 
 class SyntheticDataset(Dataset):
     def __init__(self):
