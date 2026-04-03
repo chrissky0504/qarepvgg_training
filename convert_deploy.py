@@ -5,7 +5,7 @@ from backbones.repvgg import repvgg_model_convert
 
 # 設定路徑 (請修改成您 model.pt 所在的實際路徑)
 # 因為您的 config.output = None，它通常會存在 work_dirs/ms1m-retinaface-t1/model.pt
-model_path = "work_dirs/my_qarepvgg_run/model.pt" 
+model_path = "qarepvgg_40.pt" 
 
 print(f"正在載入: {model_path} ...")
 
@@ -29,6 +29,6 @@ deploy_model.fc.load_state_dict(train_model.fc.state_dict())
 deploy_model.bn_output.load_state_dict(train_model.bn_output.state_dict())
 
 # 5. 存檔
-save_name = "qarepvgg_b1_deploy.pt"
+save_name = "qa40_deploy.pt"
 torch.save(deploy_model.state_dict(), save_name)
 print(f"變身完成！已儲存為: {save_name}")
