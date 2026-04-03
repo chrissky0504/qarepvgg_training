@@ -1596,7 +1596,7 @@ def create_QARepVGG_B1_Outdoor(deploy=False):
     return RepVGG(num_blocks=[4, 6, 16, 1], num_classes=1000,
                   width_multiplier=[2, 2, 2, 4], override_groups_map=None, deploy=deploy, 
                   block_cls=partial(QARepVGGBlockV2, act=nn.PReLU),
-                  strides=[2, 2, 2, 2], stage0_stride=1) # 關鍵：保留高解析度
+                  strides=[2, 2, 2, 2], stage0_stride=2) 
 
 func_dict = {
 'RepVGG-A0': create_RepVGG_A0,

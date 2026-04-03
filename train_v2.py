@@ -186,7 +186,7 @@ def main(args):
     )
 
     loss_am = AverageMeter()
-    amp = torch.cuda.amp.grad_scaler.GradScaler(growth_interval=100)
+    amp = torch.amp.GradScaler('cuda', growth_interval=100)
 
     loss_history = []
     acc_history = []

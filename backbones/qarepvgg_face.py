@@ -55,7 +55,7 @@ class QARepVGGFace_Outdoor(nn.Module):
         
         # 替換成 GhostFaceNets 推薦的 Modified GDC (解決 7x7 撐爆記憶體的問題)
         self.output_head = nn.Sequential(
-            nn.Conv2d(last_channel, last_channel, kernel_size=7, stride=1, groups=last_channel, bias=False),
+            nn.Conv2d(last_channel, last_channel, kernel_size=4, stride=1, groups=last_channel, bias=False),
             nn.BatchNorm2d(last_channel),
             nn.Conv2d(last_channel, 512, kernel_size=1, stride=1, bias=False),
             nn.BatchNorm2d(512),
