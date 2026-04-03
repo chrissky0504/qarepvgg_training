@@ -46,21 +46,28 @@ class QARepVGGFace_Outdoor(nn.Module):
         repvgg_func = get_RepVGG_func_by_name(network_name)
         self.backbone = repvgg_func(deploy=deploy)
         
+        # 清除不必要的 ImageNet 分類頭
         if hasattr(self.backbone, 'linear'):
             del self.backbone.linear
         if hasattr(self.backbone, 'gap'):
             del self.backbone.gap
             
-        last_channel = self.backbone.in_planes 
+        last_channel = self.backbone.in_planes # B1 是 2048
         
-        # 替換成 GhostFaceNets 推薦的 Modified GDC (解決 7x7 撐爆記憶體的問題)
+        # 【大升級】Modified GDC (專為 Stride 2 產生的 4x4 特徵圖設計)
         self.output_head = nn.Sequential(
+            # 1. Depthwise Conv：用 4x4 的卷積核，剛好把 4x4 的特徵圖壓縮成 1x1
             nn.Conv2d(last_channel, last_channel, kernel_size=4, stride=1, groups=last_channel, bias=False),
             nn.BatchNorm2d(last_channel),
+            
+            # 2. Pointwise Conv：把 2048 通道降維到 512
             nn.Conv2d(last_channel, 512, kernel_size=1, stride=1, bias=False),
             nn.BatchNorm2d(512),
+            
+            # 3. 拉平並接上最後的 Linear (此時只需要處理 512 -> 512，參數極少！)
             nn.Flatten(),
-            nn.Linear(512, 512)
+            nn.Linear(512, 512),
+            nn.BatchNorm1d(512)
         )
 
     def forward(self, x):
@@ -69,6 +76,8 @@ class QARepVGGFace_Outdoor(nn.Module):
         x = self.backbone.stage2(x)
         x = self.backbone.stage3(x)
         x = self.backbone.stage4(x)
+        
+        # 經過 GDC，輸出 512 維的 Embedding
         x = self.output_head(x)
         return x
 
