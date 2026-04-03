@@ -6,7 +6,7 @@ from easydict import EasyDict as edict
 
 config = edict()
 config.margin_list = (1.0, 0.5, 0.0)
-config.network = "qarepvgg_b1"
+config.network = "qarepvgg_v2_prelu_b1_outdoor"
 config.resume = False 
 config.output = None
 config.embedding_size = 512

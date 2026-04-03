@@ -1,6 +1,8 @@
+from backbones.repvgg import create_QARepVGGV2_PRELU_B1_Outdoor
+
 from .iresnet import iresnet18, iresnet34, iresnet50, iresnet100, iresnet200
 from .mobilefacenet import get_mbf
-from .qarepvgg_face import create_QARepVGG_B1
+from .qarepvgg_face import create_QARepVGG_B1, create_QARepVGG_B1_Outdoor
 
 def get_model(name, **kwargs):
     # resnet
@@ -18,6 +20,8 @@ def get_model(name, **kwargs):
         return create_QARepVGG_B1(deploy=False) # 訓練時 deploy 必定為 False
     elif name == "qarepvgg_b1_deploy":
         return create_QARepVGG_B1(deploy=True)
+    elif name == "qarepvgg_v2_prelu_b1_outdoor":
+        return create_QARepVGG_B1_Outdoor(deploy=False)
     elif name == "r2060":
         from .iresnet2060 import iresnet2060
         return iresnet2060(False, **kwargs)

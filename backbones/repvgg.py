@@ -1592,7 +1592,7 @@ def create_GRERepVGG_D2se(deploy=False):
     return RepVGG(num_blocks=[8, 14, 24, 1], num_classes=1000,
                   width_multiplier=[2.5, 2.5, 2.5, 5], override_groups_map=None, deploy=deploy, use_se=True, block_cls=GRERepVGGBlock)
 
-def create_QARepVGGV2_PRELU_B1_Outdoor(deploy=False):
+def create_QARepVGG_B1_Outdoor(deploy=False):
     return RepVGG(num_blocks=[4, 6, 16, 1], num_classes=1000,
                   width_multiplier=[2, 2, 2, 4], override_groups_map=None, deploy=deploy, 
                   block_cls=partial(QARepVGGBlockV2, act=nn.PReLU),
@@ -1644,7 +1644,7 @@ func_dict = {
 'GRERepVGG-B0': create_GRERepVGG_B0,
 'RepVGG-B1': create_RepVGG_B1,
 'QARepVGG-B1':create_QARepVGGBlock_B1,
-'QARepVGGV2PRELU-B1-Outdoor': create_QARepVGGV2_PRELU_B1_Outdoor,
+'QARepVGGV2PRELU-B1-Outdoor': create_QARepVGG_B1_Outdoor,
 'QARepVGGV2-B1':create_QARepVGGBlockV2_B1,
 'GRERepVGG-B1': create_GRERepVGG_B1,
 'RepVGG-B1g2': create_RepVGG_B1g2,
