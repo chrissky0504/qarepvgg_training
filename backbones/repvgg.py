@@ -1195,7 +1195,7 @@ class GRERepVGGBlockV4(RepVGGBlock):
 
 class RepVGG(nn.Module):
 
-    def __init__(self, num_blocks, num_classes=1000, width_multiplier=None, override_groups_map=None, deploy=False, use_se=False, block_cls=RepVGGBlock, strides=[2, 2, 2, 2]):
+    def __init__(self, num_blocks, num_classes=1000, width_multiplier=None, override_groups_map=None, deploy=False, use_se=False, block_cls=RepVGGBlock, strides=[2, 2, 2, 2], stage0_stride=2):
         super(RepVGG, self).__init__()
 
         assert len(width_multiplier) == 4
@@ -1208,7 +1208,7 @@ class RepVGG(nn.Module):
 
         self.in_planes = min(64, int(64 * width_multiplier[0]))
 
-        self.stage0 = block_cls(in_channels=3, out_channels=self.in_planes, kernel_size=3, stride=2, padding=1, deploy=self.deploy, use_se=self.use_se)
+        self.stage0 = block_cls(in_channels=3, out_channels=self.in_planes, kernel_size=3, stride=stage0_stride, padding=1, deploy=self.deploy, use_se=self.use_se)
         self.cur_layer_idx = 1
         self.stage1 = self._make_stage(int(64 * width_multiplier[0]), num_blocks[0], stride=strides[0], block_cls=block_cls)
         self.stage2 = self._make_stage(int(128 * width_multiplier[1]), num_blocks[1], stride=strides[1], block_cls=block_cls)
@@ -1592,6 +1592,11 @@ def create_GRERepVGG_D2se(deploy=False):
     return RepVGG(num_blocks=[8, 14, 24, 1], num_classes=1000,
                   width_multiplier=[2.5, 2.5, 2.5, 5], override_groups_map=None, deploy=deploy, use_se=True, block_cls=GRERepVGGBlock)
 
+def create_QARepVGGV2_PRELU_B1_Outdoor(deploy=False):
+    return RepVGG(num_blocks=[4, 6, 16, 1], num_classes=1000,
+                  width_multiplier=[2, 2, 2, 4], override_groups_map=None, deploy=deploy, 
+                  block_cls=partial(QARepVGGBlockV2, act=nn.PReLU),
+                  strides=[2, 2, 2, 2], stage0_stride=1) # 關鍵：保留高解析度
 
 func_dict = {
 'RepVGG-A0': create_RepVGG_A0,
@@ -1639,6 +1644,7 @@ func_dict = {
 'GRERepVGG-B0': create_GRERepVGG_B0,
 'RepVGG-B1': create_RepVGG_B1,
 'QARepVGG-B1':create_QARepVGGBlock_B1,
+'QARepVGGV2PRELU-B1-Outdoor': create_QARepVGGV2_PRELU_B1_Outdoor,
 'QARepVGGV2-B1':create_QARepVGGBlockV2_B1,
 'GRERepVGG-B1': create_GRERepVGG_B1,
 'RepVGG-B1g2': create_RepVGG_B1g2,

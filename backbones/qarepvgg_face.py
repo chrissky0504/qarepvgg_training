@@ -1,74 +1,91 @@
 import torch
 import torch.nn as nn
-from .repvgg import RepVGG, RepVGGBlock # 這裡引用您下載的那個檔案
+from .repvgg import RepVGG, get_RepVGG_func_by_name
 
-# 定義人臉辨識專用的 QARepVGG
+# ====================================================================
+# 1. 原本的 QARepVGGFace (完全不動，保留給你的 Baseline 使用)
+# ====================================================================
 class QARepVGGFace(nn.Module):
     def __init__(self, num_blocks, width_multiplier, deploy=False):
         super(QARepVGGFace, self).__init__()
-        
-        # 1. 呼叫原始的 RepVGG 架構 (它現在已經是 QA 版本的 Block 了)
         self.backbone = RepVGG(
             num_blocks=num_blocks,
             width_multiplier=width_multiplier,
             override_groups_map=None,
             deploy=deploy
         )
+        if hasattr(self.backbone, 'linear'):
+            del self.backbone.linear
         
-        # 2. 【關鍵】砍掉 ImageNet 的分類頭 (Linear 1000)
-        # 我們不需要它，留著只會佔記憶體
-        del self.backbone.linear
-        
-        # 計算最後一層的通道數 (根據 B1 架構通常是 2048)
-        # 這裡動態取得，避免寫死
         last_channel = 512 * width_multiplier[3] 
-        
-        # 3. 接上 ArcFace 標準的 Embedding Head
-        # 結構：BN -> Dropout -> FC -> BN
         self.bn_input = nn.BatchNorm2d(int(last_channel))
         self.dropout = nn.Dropout(0.4)
         self.fc = nn.Linear(32768, 512)
         self.bn_output = nn.BatchNorm1d(512)
 
     def forward(self, x):
-        # --- 跑骨幹 (Backbone) ---
-        # RepVGG 的 forward 原始碼裡有經過 self.linear，我們因為砍掉了，
-        # 所以不能直接 call self.backbone(x)，要一層一層跑 stage
-        
         x = self.backbone.stage0(x)
         x = self.backbone.stage1(x)
         x = self.backbone.stage2(x)
         x = self.backbone.stage3(x)
         x = self.backbone.stage4(x)
-        
-        # --- 跑特徵頭 (Embedding Head) ---
         x = self.bn_input(x)
-        x = x.reshape(x.size(0), -1) # 拉平 (Flatten)
+        x = x.reshape(x.size(0), -1) 
         x = self.dropout(x)
         x = self.fc(x)
         x = self.bn_output(x)
-        
         return x
 
-# --- 方便呼叫的函式 ---
+# ====================================================================
+# 2. 新增的特化版 QARepVGGFace_Outdoor (戶外長距離專用)
+# ====================================================================
+class QARepVGGFace_Outdoor(nn.Module):
+    def __init__(self, network_name, deploy=False):
+        super(QARepVGGFace_Outdoor, self).__init__()
+        
+        repvgg_func = get_RepVGG_func_by_name(network_name)
+        self.backbone = repvgg_func(deploy=deploy)
+        
+        if hasattr(self.backbone, 'linear'):
+            del self.backbone.linear
+        if hasattr(self.backbone, 'gap'):
+            del self.backbone.gap
+            
+        last_channel = self.backbone.in_planes 
+        
+        # 替換成 GhostFaceNets 推薦的 Modified GDC (解決 7x7 撐爆記憶體的問題)
+        self.output_head = nn.Sequential(
+            nn.Conv2d(last_channel, last_channel, kernel_size=7, stride=1, groups=last_channel, bias=False),
+            nn.BatchNorm2d(last_channel),
+            nn.Conv2d(last_channel, 512, kernel_size=1, stride=1, bias=False),
+            nn.BatchNorm2d(512),
+            nn.Flatten(),
+            nn.Linear(512, 512)
+        )
 
+    def forward(self, x):
+        x = self.backbone.stage0(x)
+        x = self.backbone.stage1(x)
+        x = self.backbone.stage2(x)
+        x = self.backbone.stage3(x)
+        x = self.backbone.stage4(x)
+        x = self.output_head(x)
+        return x
+
+# ====================================================================
+# 3. 呼叫函式區 (給 train_v2.py 抓取使用)
+# ====================================================================
+
+# --- 保留舊版的呼叫 ---
 def create_QARepVGG_B1(deploy=False):
-    """
-    建立 QARepVGG-B1 模型 (推薦 AGX 使用這個版本)
-    參數量適中，速度極快
-    """
-    return QARepVGGFace(
-        num_blocks=[4, 6, 16, 1], 
-        width_multiplier=[2, 2, 2, 4], 
-        deploy=deploy
-    )
+    return QARepVGGFace(num_blocks=[4, 6, 16, 1], width_multiplier=[2, 2, 2, 4], deploy=deploy)
 
 def create_QARepVGG_A0(deploy=False):
-    """
-    建立 QARepVGG-A0 模型 (如果 B1 太慢，改用這個輕量版)
-    """
-    return QARepVGGFace(
-        num_blocks=[2, 4, 14, 1], 
-        width_multiplier=[0.75, 0.75, 0.75, 2.5], 
-        deploy=deploy
-    )
+    return QARepVGGFace(num_blocks=[2, 4, 14, 1], width_multiplier=[0.75, 0.75, 0.75, 2.5], deploy=deploy)
+
+# --- 新增優化版的呼叫 ---
+def create_QARepVGG_B1_Outdoor(deploy=False):
+    return QARepVGGFace_Outdoor(network_name='QARepVGGV2PRELU-B1-Outdoor', deploy=deploy)
+
+def create_QARepVGG_A0_Outdoor(deploy=False):
+    return QARepVGGFace_Outdoor(network_name='QARepVGGV2PRELU-A0-Outdoor', deploy=deploy)
