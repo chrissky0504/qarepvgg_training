@@ -1,4 +1,4 @@
-from backbones.repvgg import create_QARepVGGV2_PRELU_B1_Outdoor
+from backbones.repvgg import create_QARepVGG_B1_Outdoor
 
 from .iresnet import iresnet18, iresnet34, iresnet50, iresnet100, iresnet200
 from .mobilefacenet import get_mbf
