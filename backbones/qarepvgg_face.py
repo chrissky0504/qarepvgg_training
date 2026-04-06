@@ -54,19 +54,18 @@ class QARepVGGFace_Outdoor(nn.Module):
             
         last_channel = self.backbone.in_planes # B1 是 2048
         
-        # 【大升級】Modified GDC (專為 Stride 2 產生的 4x4 特徵圖設計)
+        # 【大升級】Modified GDC (預防梯度壞死版)
         self.output_head = nn.Sequential(
-            # 1. Depthwise Conv：用 4x4 的卷積核，剛好把 4x4 的特徵圖壓縮成 1x1
+            nn.BatchNorm2d(last_channel), # 先做一次 BN，穩定進入 GDC 前的特徵分佈
+            
+            # 1. Depthwise Conv：用 4x4 的卷積核，把 4x4 的特徵圖壓縮成 1x1
             nn.Conv2d(last_channel, last_channel, kernel_size=4, stride=1, groups=last_channel, bias=False),
             nn.BatchNorm2d(last_channel),
             
-            # 2. Pointwise Conv：把 2048 通道降維到 512
-            nn.Conv2d(last_channel, 512, kernel_size=1, stride=1, bias=False),
-            nn.BatchNorm2d(512),
-            
-            # 3. 拉平並接上最後的 Linear (此時只需要處理 512 -> 512，參數極少！)
             nn.Flatten(),
-            nn.Linear(512, 512),
+            
+            # 2. PW/FC：直接將 2048 降維到 512 (乾淨俐落，絕不疊加無效線性層)
+            nn.Linear(last_channel, 512, bias=False),
             nn.BatchNorm1d(512)
         )
 
